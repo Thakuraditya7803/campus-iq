@@ -6,6 +6,7 @@ from qdrant_client.models import Distance, VectorParams, PointStruct
 from ai.embeddings.embeddings import EmbeddingModel
 from ingestion.pdf.extract import extract_text_from_pdf
 from ingestion.pdf.chunker import chunk_text
+from ai.rag.reranker import Reranker
 
 
 COLLECTION_NAME = "campus_documents"
@@ -90,14 +91,35 @@ def index_pdf(client, embedding_model, pdf_path):
     print(f"Indexed {len(points)} chunks from {pdf_path.name}")
 
 
-def search_documents(client, embedding_model, query, top_k=3):
+
+def search_documents(
+    client,
+    embedding_model,
+    query,
+    top_k=5,
+    retrieval_k=5
+):
+    """
+    Retrieve candidate documents from Qdrant and
+    rerank them using a Cross-Encoder.
+    """
 
     query_embedding = embedding_model.generate_embedding(query)
 
     results = client.query_points(
         collection_name=COLLECTION_NAME,
         query=query_embedding,
-        limit=top_k,
+        limit=retrieval_k,
+    ).points
+
+    # --------------------------------------------------
+    # STEP 1: Vector retrieval
+    # --------------------------------------------------
+
+    results = client.query_points(
+        collection_name=COLLECTION_NAME,
+        query=query_embedding,
+        limit=retrieval_k,
     ).points
 
     documents = []
@@ -105,14 +127,45 @@ def search_documents(client, embedding_model, query, top_k=3):
     for result in results:
 
         documents.append({
-    "text": result.payload["text"],
-    "source": result.payload["source"],
-    "page": result.payload["page"],
-    "chunk_id": result.payload.get("chunk_id"),
-    "score": result.score
-})
+            "text": result.payload["text"],
+            "source": result.payload["source"],
+            "page": result.payload["page"],
+            "chunk_id": result.payload.get("chunk_id"),
+            "score": result.score
+        })
 
-    return documents
+    if not documents:
+        return []
+
+    # --------------------------------------------------
+    # STEP 2: Reranking
+    # --------------------------------------------------
+
+    print("\nVECTOR RETRIEVAL DEBUG")
+
+    for i, document in enumerate(documents, start=1):
+        print(
+        f"{i}. Chunk={document['chunk_id']} "
+        f"Vector={document['score']:.4f}"
+    )
+    reranker = Reranker()
+
+    reranked_documents = reranker.rerank(
+        query,
+        documents,
+        top_k=top_k
+    )
+
+    print("\nRERANKING DEBUG")
+
+    for i, document in enumerate(reranked_documents, start=1):
+        print(
+        f"{i}. Chunk={document['chunk_id']} "
+        f"Vector={document['score']:.4f} "
+        f"Rerank={document['rerank_score']:.4f}"
+        )
+        return reranked_documents
+
 
 def check_evidence(documents, min_score=0.50, min_gap=0.02):
     """

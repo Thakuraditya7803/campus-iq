@@ -63,7 +63,8 @@ for test in TEST_CASES:
         client,
         embedding_model,
         question,
-        top_k=2
+        top_k=5,
+        retrieval_k=5
     )
 
     retrieved_chunks = [
