@@ -110,7 +110,6 @@ def main():
 
     print("\nCampusIQ knowledge base is ready!")
 
-
 def search_documents(client, model, query, top_k=3):
 
     query_embedding = model.encode(query).tolist()
@@ -133,17 +132,12 @@ def search_documents(client, model, query, top_k=3):
         print(f"Page: {result.payload['page']}")
         print(f"Text: {result.payload['text']}")
 
-if __name__ == "__main__":
-
-    main()
-
-    print("\nLoading search components...")
-
-    model = SentenceTransformer("all-MiniLM-L6-v2")
-    client = QdrantClient(path=".qdrant")
-
-    search_documents(
-        client,
-        model,
-        "How much attendance do I need?"
-    )
+    return [
+        {
+            "text": result.payload["text"],
+            "source": result.payload["source"],
+            "page": result.payload["page"],
+            "score": result.score
+        }
+        for result in results
+    ]
