@@ -1,3 +1,4 @@
+
 import sys
 from pathlib import Path
 
@@ -10,14 +11,24 @@ from ai.rag.rag import search_documents, check_evidence
 from ai.rag.generator import generate_answer
 
 
-# Connect to Qdrant
+# ============================================================
+# CONNECT TO QDRANT
+# ============================================================
+
 client = QdrantClient(path=".qdrant")
 
-# Load embedding model
+
+# ============================================================
+# LOAD EMBEDDING MODEL
+# ============================================================
+
 embedding_model = EmbeddingModel()
 
 
-# User question
+# ============================================================
+# USER QUESTION
+# ============================================================
+
 query = "What happens if my attendance falls below 75%?"
 
 
@@ -28,7 +39,10 @@ print("=" * 60)
 print(query)
 
 
-# Retrieve relevant documents
+# ============================================================
+# RETRIEVE RELEVANT DOCUMENTS
+# ============================================================
+
 documents = search_documents(
     client,
     embedding_model,
@@ -37,7 +51,10 @@ documents = search_documents(
 )
 
 
-# Display retrieved documents
+# ============================================================
+# DISPLAY RETRIEVED DOCUMENTS
+# ============================================================
+
 print("\n" + "=" * 60)
 print("RETRIEVED DOCUMENTS")
 print("=" * 60)
@@ -45,46 +62,74 @@ print("=" * 60)
 for i, document in enumerate(documents, start=1):
 
     print(f"\nResult {i}")
-    print(f"Score: {document['score']:.4f}")
-    print(f"Source: {document['source']}")
-    print(f"Page: {document['page']}")
-    print(f"Chunk: {document.get('chunk_id')}")
+
+    print(
+        f"Vector Score : "
+        f"{document['score']:.4f}"
+    )
+
+    print(
+        f"Rerank Score : "
+        f"{document.get('rerank_score', 0.0):.4f}"
+    )
+
+    print(
+        f"Source       : "
+        f"{document['source']}"
+    )
+
+    print(
+        f"Page         : "
+        f"{document['page']}"
+    )
+
+    print(
+        f"Chunk        : "
+        f"{document.get('chunk_id')}"
+    )
 
 
-# Evidence Guard
+# ============================================================
+# EVIDENCE GUARD V2
+# ============================================================
+
 print("\n" + "=" * 60)
-print("EVIDENCE GUARD")
+print("EVIDENCE GUARD V2")
 print("=" * 60)
+
 
 evidence = check_evidence(
     documents,
-    min_score=0.50,
-    min_gap=0.02
+    vector_threshold=0.45,
+    rerank_threshold=0.0
+)
+
+
+print(
+    f"Best Vector Score : "
+    f"{evidence['best_vector_score']:.4f}"
 )
 
 print(
-    f"Best Score    : {evidence['best_score']:.4f}"
+    f"Best Rerank Score : "
+    f"{evidence['best_rerank_score']:.4f}"
 )
 
 print(
-    f"Second Score  : {evidence['second_score']:.4f}"
-)
-
-print(
-    f"Score Gap     : {evidence['score_gap']:.4f}"
-)
-
-print(
-    f"Decision      : "
+    f"Decision          : "
     f"{'PASS' if evidence['has_evidence'] else 'ABSTAIN'}"
 )
 
 print(
-    f"Reason        : {evidence['reason']}"
+    f"Reason            : "
+    f"{evidence['reason']}"
 )
 
 
-# Generate answer only if evidence is strong
+# ============================================================
+# GENERATE ANSWER ONLY IF EVIDENCE IS STRONG
+# ============================================================
+
 if evidence["has_evidence"]:
 
     print("\nPASS - Strong evidence found")
@@ -108,7 +153,10 @@ else:
     )
 
 
-# Final answer
+# ============================================================
+# FINAL ANSWER
+# ============================================================
+
 print("\n" + "=" * 60)
 print("CAMPUSIQ AI ANSWER")
 print("=" * 60)
@@ -116,5 +164,8 @@ print("=" * 60)
 print("\n" + answer)
 
 
-# Close Qdrant
+# ============================================================
+# CLOSE QDRANT
+# ============================================================
+
 client.close()
