@@ -1,33 +1,43 @@
-from sentence_transformers import SentenceTransformer
 from qdrant_client import QdrantClient
 
-from ai.rag.rag import search_documents, COLLECTION_NAME
+from ai.embeddings.embeddings import EmbeddingModel
+from ai.rag.rag import search_documents
 from ai.rag.generator import generate_answer
 
 
-model = SentenceTransformer("all-MiniLM-L6-v2")
-
 client = QdrantClient(path=".qdrant")
 
+embedding_model = EmbeddingModel()
 
 question = "How much attendance do I need?"
 
-
 documents = search_documents(
     client,
-    model,
+    embedding_model,
     question,
     top_k=3
 )
 
-
-answer = generate_answer(
-    question,
-    documents
-)
-
-
 print("\n==============================")
-print("CampusIQ Answer")
+print("Retrieved Documents")
 print("==============================")
-print(answer)
+
+for doc in documents:
+    print(f"\nScore: {doc['score']:.4f}")
+    print(f"Source: {doc['source']}")
+    print(f"Page: {doc['page']}")
+
+try:
+    answer = generate_answer(
+        question,
+        documents
+    )
+
+    print("\n==============================")
+    print("CampusIQ AI Answer")
+    print("==============================")
+
+    print(answer)
+
+finally:
+    client.close()

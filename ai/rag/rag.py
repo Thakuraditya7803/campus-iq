@@ -1,118 +1,66 @@
 from pathlib import Path
-
-from pypdf import PdfReader
-from sentence_transformers import SentenceTransformer
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
+
+from ai.embeddings.embeddings import EmbeddingModel
+from ingestion.pdf.extract import extract_text_from_pdf
 
 
 COLLECTION_NAME = "campus_documents"
 
 
-def extract_text(pdf_path):
-    reader = PdfReader(pdf_path)
+def create_collection(client, vector_size):
 
-    pages = []
-
-    for page_number, page in enumerate(reader.pages, start=1):
-        text = page.extract_text()
-
-        if text:
-            pages.append({
-                "page": page_number,
-                "text": text.strip()
-            })
-
-    return pages
-
-
-def chunk_text(text, chunk_size=500):
-    words = text.split()
-
-    chunks = []
-
-    for i in range(0, len(words), chunk_size):
-        chunk = " ".join(words[i:i + chunk_size])
-        chunks.append(chunk)
-
-    return chunks
-
-
-def main():
-
-    print("Loading embedding model...")
-
-    model = SentenceTransformer("all-MiniLM-L6-v2")
-
-    print("Connecting to Qdrant...")
-
-    client = QdrantClient(path=".qdrant")
-
-    # Create collection if it doesn't exist
     collections = client.get_collections().collections
+    existing = [c.name for c in collections]
 
-    collection_names = [collection.name for collection in collections]
+    if COLLECTION_NAME in existing:
+        print(f"Collection '{COLLECTION_NAME}' already exists.")
+        return
 
-    if COLLECTION_NAME not in collection_names:
-
-        client.create_collection(
-            collection_name=COLLECTION_NAME,
-            vectors_config=VectorParams(
-                size=384,
-                distance=Distance.COSINE
-            )
+    client.create_collection(
+        collection_name=COLLECTION_NAME,
+        vectors_config=VectorParams(
+            size=vector_size,
+            distance=Distance.COSINE
         )
+    )
 
-        print("Created Qdrant collection.")
+    print(f"Created collection: {COLLECTION_NAME}")
 
-    pdf_folder = Path("data/raw")
 
-    points = []
+def index_pdf(client, embedding_model, pdf_path):
 
-    point_id = 1
+    text = extract_text_from_pdf(str(pdf_path))
 
-    for pdf_file in pdf_folder.glob("*.pdf"):
+    embedding = embedding_model.generate_embedding(text)
 
-        print(f"\nProcessing: {pdf_file.name}")
+    create_collection(
+        client,
+        vector_size=len(embedding)
+    )
 
-        pages = extract_text(pdf_file)
+    point = PointStruct(
+        id=1,
+        vector=embedding,
+        payload={
+            "source": pdf_path.name,
+            "page": 1,
+            "text": text
+        }
+    )
 
-        for page in pages:
+    client.upsert(
+        collection_name=COLLECTION_NAME,
+        points=[point]
+    )
 
-            chunks = chunk_text(page["text"])
+    print(f"Indexed: {pdf_path.name}")
 
-            for chunk in chunks:
 
-                embedding = model.encode(chunk).tolist()
+def search_documents(client, embedding_model, query, top_k=3):
 
-                points.append(
-                    PointStruct(
-                        id=point_id,
-                        vector=embedding,
-                        payload={
-                            "text": chunk,
-                            "source": pdf_file.name,
-                            "page": page["page"]
-                        }
-                    )
-                )
-
-                point_id += 1
-
-    if points:
-
-        client.upsert(
-            collection_name=COLLECTION_NAME,
-            points=points
-        )
-
-    print(f"\nInserted {len(points)} chunks into Qdrant.")
-
-    print("\nCampusIQ knowledge base is ready!")
-
-def search_documents(client, model, query, top_k=3):
-
-    query_embedding = model.encode(query).tolist()
+    query_embedding = embedding_model.generate_embedding(query)
 
     results = client.query_points(
         collection_name=COLLECTION_NAME,
@@ -120,24 +68,15 @@ def search_documents(client, model, query, top_k=3):
         limit=top_k,
     ).points
 
-    print("\n==============================")
-    print(f"QUESTION: {query}")
-    print("==============================")
+    documents = []
 
-    for i, result in enumerate(results, start=1):
+    for result in results:
 
-        print(f"\nResult {i}")
-        print(f"Score: {result.score:.4f}")
-        print(f"Source: {result.payload['source']}")
-        print(f"Page: {result.payload['page']}")
-        print(f"Text: {result.payload['text']}")
-
-    return [
-        {
+        documents.append({
             "text": result.payload["text"],
             "source": result.payload["source"],
             "page": result.payload["page"],
             "score": result.score
-        }
-        for result in results
-    ]
+        })
+
+    return documents
