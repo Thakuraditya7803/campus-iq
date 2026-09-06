@@ -1,18 +1,89 @@
-import requests
-import json
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from qdrant_client import QdrantClient
 
-response = requests.post(
-  url="https://openrouter.ai/api/v1/embeddings",
-  headers={
-    "Authorization": "Bearer <OPENROUTER_API_KEY>",
-    "Content-Type": "application/json",
-    "HTTP-Referer": "<YOUR_SITE_URL>", # Optional. Site URL for rankings on openrouter.ai.
-    "X-OpenRouter-Title": "<YOUR_SITE_NAME>", # Optional. Site title for rankings on openrouter.ai.
-  },
-  data=json.dumps({
-    "model": "nvidia/nemotron-3-embed-1b:free",
-    "input": "Your text string goes here",
-    # "input": ["text1", "text2", "text3"], # batch embeddings also supported!
-    "encoding_format": "float"
-  })
+from ai.embeddings.embeddings import EmbeddingModel
+from ai.rag.rag import ask_campusiq
+
+
+# --------------------------------------------------
+# FastAPI Application
+# --------------------------------------------------
+
+app = FastAPI(
+    title="CampusIQ API",
+    description="AI-powered campus knowledge assistant",
+    version="1.0.0"
 )
+
+
+# --------------------------------------------------
+# CORS
+# --------------------------------------------------
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# --------------------------------------------------
+# Initialize Services
+# --------------------------------------------------
+
+client = QdrantClient(
+    path=".qdrant"
+)
+
+embedding_model = EmbeddingModel()
+
+
+# --------------------------------------------------
+# Request Model
+# --------------------------------------------------
+
+class AskRequest(BaseModel):
+    question: str
+
+
+# --------------------------------------------------
+# Health Check
+# --------------------------------------------------
+
+@app.get("/health")
+def health():
+    return {
+        "status": "ok",
+        "service": "CampusIQ API"
+    }
+
+
+# --------------------------------------------------
+# Ask CampusIQ
+# --------------------------------------------------
+
+@app.post("/ask")
+def ask(request: AskRequest):
+
+    question = request.question.strip()
+
+    if not question:
+        return {
+            "status": "error",
+            "answer": "Please provide a question.",
+            "sources": [],
+            "evidence": {},
+            "model": None
+        }
+
+    result = ask_campusiq(
+        client=client,
+        embedding_model=embedding_model,
+        query=question
+    )
+
+    return result
