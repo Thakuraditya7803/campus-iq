@@ -3,7 +3,9 @@ import os
 from dotenv import load_dotenv
 from openai import OpenAI
 
+
 load_dotenv()
+
 
 client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
@@ -11,50 +13,90 @@ client = OpenAI(
 )
 
 
-def generate_answer(question, retrieved_documents):
+MODELS = [
+    "minimax/minimax-m3:free",
+    "inclusionai/ling-3.0-flash-fin:free",
+    "google/gemma-4-26b-a4b-it:free",
+    "z-ai/glm-5.2:free",
+    "nvidia/nemotron-3.5-lightning:free",
+]
 
-    context = "\n\n".join(
-        [
-            f"Source: {doc['source']}\n"
-            f"Page: {doc['page']}\n"
-            f"Content: {doc['text']}"
-            for doc in retrieved_documents
-        ]
-    )
+
+def generate_answer(query, documents):
+
+    if not documents:
+        return (
+            "I couldn't find reliable information about that "
+            "in the campus knowledge base."
+        )
+
+    context_parts = []
+
+    for i, document in enumerate(documents, start=1):
+
+        context_parts.append(
+            f"""
+SOURCE {i}
+Document: {document['source']}
+Page: {document['page']}
+
+Content:
+{document['text']}
+"""
+        )
+
+    context = "\n".join(context_parts)
 
     prompt = f"""
 You are CampusIQ, an AI-powered campus knowledge assistant.
 
-Your job is to answer questions using ONLY the provided campus
-knowledge base.
+Answer the student's question using ONLY the provided campus
+knowledge.
 
-Rules:
+STRICT RULES:
 
-1. Do not invent information.
-2. Do not use outside knowledge.
-3. If the answer cannot be found in the context, say:
-   "I couldn't find reliable information about that in the campus knowledge base."
-4. Always provide the source document and page.
-5. Give a concise and clear answer.
-6. If the policy contains multiple requirements, mention the relevant ones.
+1. Do not use outside knowledge.
+2. Do not invent information.
+3. If the answer cannot be found in the provided context,
+   say:
+   "I couldn't find reliable information about that in the
+   campus knowledge base."
+4. Give a concise and clear answer.
+5. Mention the relevant source document and page.
+6. Do not mention unrelated information from the context.
 
-Campus Knowledge:
+CAMPUS KNOWLEDGE:
 
 {context}
 
-User Question:
+STUDENT QUESTION:
 
-{question}
+{query}
+
+ANSWER:
 """
 
-    response = client.chat.completions.create(
-        model="inclusionai/ling-3.0-flash-fin:free",
-        messages=[
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ],
-    )
+    for model in MODELS:
 
-    return response.choices[0].message.content
+        try:
+
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                temperature=0.1,
+            )
+
+            return response.choices[0].message.content
+
+        except Exception as e:
+
+            print(f"\nModel failed: {model}")
+            print(f"Error: {e}")
+            print("Trying next model...\n")
+
+    return "Unable to generate an answer right now."

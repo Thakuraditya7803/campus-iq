@@ -1,3 +1,9 @@
+import sys
+from pathlib import Path
+
+sys.path.append(str(Path(__file__).resolve().parent))
+
+
 from qdrant_client import QdrantClient
 
 from ai.embeddings.embeddings import EmbeddingModel
@@ -9,35 +15,52 @@ client = QdrantClient(path=".qdrant")
 
 embedding_model = EmbeddingModel()
 
-question = "How much attendance do I need?"
+
+query = "What happens if my attendance falls below 75%?"
+
+
+print("\n" + "=" * 60)
+print("USER QUESTION")
+print("=" * 60)
+
+print(query)
+
 
 documents = search_documents(
     client,
     embedding_model,
-    question,
-    top_k=3
+    query,
+    top_k=2
 )
 
-print("\n==============================")
-print("Retrieved Documents")
-print("==============================")
 
-for doc in documents:
-    print(f"\nScore: {doc['score']:.4f}")
-    print(f"Source: {doc['source']}")
-    print(f"Page: {doc['page']}")
+print("\n" + "=" * 60)
+print("RETRIEVED DOCUMENTS")
+print("=" * 60)
 
-try:
-    answer = generate_answer(
-        question,
-        documents
-    )
 
-    print("\n==============================")
-    print("CampusIQ AI Answer")
-    print("==============================")
+for i, document in enumerate(documents, start=1):
 
-    print(answer)
+    print(f"\nResult {i}")
+    print(f"Score: {document['score']:.4f}")
+    print(f"Source: {document['source']}")
+    print(f"Page: {document['page']}")
+    print(f"Chunk: {document.get('chunk_id')}")
 
-finally:
-    client.close()
+
+print("\n" + "=" * 60)
+print("GENERATING ANSWER")
+print("=" * 60)
+
+
+answer = generate_answer(
+    query,
+    documents
+)
+
+
+print("\nCampusIQ AI Answer:\n")
+print(answer)
+
+
+client.close()

@@ -1,26 +1,53 @@
+import re
+
+
 def chunk_text(text, chunk_size=1000, overlap=200):
     """
-    Split text into overlapping chunks.
-
-    chunk_size: maximum characters per chunk
-    overlap: characters shared between consecutive chunks
+    Create section-aware chunks from extracted PDF text.
     """
 
     if not text:
         return []
 
+    # Normalize whitespace
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n+", "\n", text)
+
+    # Detect numbered sections.
+    sections = re.split(
+        r"(?=\n?\s*\d+\.\s+[A-Z])",
+        text
+    )
+
+    sections = [
+        section.strip()
+        for section in sections
+        if section.strip()
+    ]
+
     chunks = []
-    start = 0
 
-    while start < len(text):
-        end = start + chunk_size
+    for section in sections:
 
-        chunk = text[start:end].strip()
+        # If section is small enough, keep it together
+        if len(section) <= chunk_size:
 
-        if chunk:
-            chunks.append(chunk)
+            chunks.append(section)
 
-        start += chunk_size - overlap
+        else:
+
+            start = 0
+
+            while start < len(section):
+
+                end = start + chunk_size
+
+                chunk = section[start:end].strip()
+
+                if chunk:
+                    chunks.append(chunk)
+
+                start += chunk_size - overlap
 
     return chunks
 
@@ -28,14 +55,32 @@ def chunk_text(text, chunk_size=1000, overlap=200):
 if __name__ == "__main__":
 
     sample_text = """
-    Students must maintain 75% overall attendance across all courses.
-    Students in B.Tech and BE programs must maintain 75% attendance
-    per subject. A minimum of 50% attendance is required per individual
-    subject.
-    """
+Universal SkillTech University (USTU)
+
+Attendance Policy
+
+1. Minimum Attendance Requirement
+
+75% overall attendance across all courses.
+75% per subject for B.Tech/BE programs.
+Minimum 50% attendance per individual subject.
+
+2. Consequences of Falling Below 75%
+
+Student is placed on the detained list.
+Barred from appearing in university examinations.
+
+3. Condonation / Relaxation
+
+Up to 5–10% relaxation may be granted.
+Medical emergency, NCC/NSS duty, inter-college events.
+"""
 
     chunks = chunk_text(sample_text)
 
+    print(f"Generated {len(chunks)} chunks")
+
     for i, chunk in enumerate(chunks, start=1):
+
         print(f"\n--- Chunk {i} ---")
         print(chunk)

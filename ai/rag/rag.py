@@ -105,10 +105,11 @@ def search_documents(client, embedding_model, query, top_k=3):
     for result in results:
 
         documents.append({
-            "text": result.payload["text"],
-            "source": result.payload["source"],
-            "page": result.payload["page"],
-            "score": result.score
-        })
+    "text": result.payload["text"],
+    "source": result.payload["source"],
+    "page": result.payload["page"],
+    "chunk_id": result.payload.get("chunk_id"),
+    "score": result.score
+})
 
     return documents

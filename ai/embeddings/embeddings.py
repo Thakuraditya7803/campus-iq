@@ -1,30 +1,21 @@
-import os
-
-from dotenv import load_dotenv
-from openai import OpenAI
-
-load_dotenv()
-
-client = OpenAI(
-    base_url="https://openrouter.ai/api/v1",
-    api_key=os.getenv("OPENROUTER_API_KEY"),
-)
+from sentence_transformers import SentenceTransformer
 
 
 class EmbeddingModel:
 
     def __init__(self):
-        self.model = "nvidia/nemotron-3-embed-1b:free"
+        self.model = SentenceTransformer(
+            "all-MiniLM-L6-v2"
+        )
 
     def generate_embedding(self, text: str):
 
-        response = client.embeddings.create(
-            model=self.model,
-            input=text,
-            encoding_format="float",
+        embedding = self.model.encode(
+            text,
+            normalize_embeddings=True
         )
 
-        return response.data[0].embedding
+        return embedding.tolist()
 
 
 if __name__ == "__main__":
