@@ -113,3 +113,57 @@ def search_documents(client, embedding_model, query, top_k=3):
 })
 
     return documents
+
+def check_evidence(documents, min_score=0.50, min_gap=0.02):
+    """
+    Evaluate the strength of retrieved evidence.
+
+    Returns:
+        {
+            "has_evidence": bool,
+            "best_score": float,
+            "second_score": float,
+            "score_gap": float,
+            "reason": str
+        }
+    """
+
+    if not documents:
+        return {
+            "has_evidence": False,
+            "best_score": 0.0,
+            "second_score": 0.0,
+            "score_gap": 0.0,
+            "reason": "No documents retrieved"
+        }
+
+    best_score = documents[0]["score"]
+
+    if len(documents) > 1:
+        second_score = documents[1]["score"]
+    else:
+        second_score = 0.0
+
+    score_gap = best_score - second_score
+
+    # Evidence is strong enough when:
+    # 1. Best result has reasonable similarity
+    # 2. Best result is meaningfully better than second result
+
+    has_evidence = (
+        best_score >= min_score
+        and score_gap >= min_gap
+    )
+
+    if has_evidence:
+        reason = "Strong evidence"
+    else:
+        reason = "Weak or ambiguous evidence"
+
+    return {
+        "has_evidence": has_evidence,
+        "best_score": best_score,
+        "second_score": second_score,
+        "score_gap": score_gap,
+        "reason": reason
+    }
